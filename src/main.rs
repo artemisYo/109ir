@@ -1,6 +1,8 @@
 mod machines;
 use machines::*;
 
+fn match_capacity(goal: usize) -> usize {}
+
 fn main() {
     let m1 = Machine::<Assembly>::new(10);
     let m2 = Machine::<QualityChecking>::new(9);

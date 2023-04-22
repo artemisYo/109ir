@@ -10,15 +10,19 @@ use std::marker::PhantomData;
 // correct range, but requires generic parameters
 // or variable type to be supplied. It also
 // computes its prices.
-
+enum FillTactic {
+    Maximize,
+    Minimize,
+}
 pub trait MachineTag {
     const COST_STEP: usize;
     const COST_BASELINE: usize;
     const CAPACITY_MAX: usize;
     const CAPACITY_MIN: usize;
+    const FILL_TACTIC: FillTactic;
 }
 #[derive(Debug)]
-pub enum MachineError {
+pub enum Error {
     LTMinCap,
     GTMaxCap,
 }
@@ -34,7 +38,7 @@ impl<T: MachineTag> Machine<T> {
     pub fn price(&self) -> usize {
         T::COST_BASELINE + T::COST_STEP * (self.capacity - T::CAPACITY_MIN)
     }
-    pub fn new(capacity: usize) -> Result<Machine<T>, MachineError> {
+    pub fn new(capacity: usize) -> Result<Machine<T>, Error> {
         match capacity {
             c if c > T::CAPACITY_MAX => Err(MachineError::GTMaxCap),
             c if c < T::CAPACITY_MIN => Err(MachineError::LTMinCap),
@@ -42,6 +46,14 @@ impl<T: MachineTag> Machine<T> {
                 capacity: c,
                 tag: PhantomData,
             }),
+        }
+    }
+    pub fn match_capacity(goal: usize) -> Vec<Self> {
+        match T::FILL_TACTIC {
+            FillTactic::Maximize => {
+                let n = goal / T::CAPACITY_MAX;
+            }
+            FillTactic::Minimize => {}
         }
     }
 }
@@ -56,6 +68,7 @@ impl MachineTag for Assembly {
     const COST_BASELINE: usize = 5000;
     const CAPACITY_MAX: usize = 15;
     const CAPACITY_MIN: usize = 10;
+    const FILL_TACTIC: FillTactic = FillTactic::Maximize;
 }
 #[derive(Debug)]
 pub struct Soldering;
@@ -64,6 +77,7 @@ impl MachineTag for Soldering {
     const COST_BASELINE: usize = 2000;
     const CAPACITY_MAX: usize = 30;
     const CAPACITY_MIN: usize = 20;
+    const FILL_TACTIC: FillTactic = FillTactic::Maximize;
 }
 #[derive(Debug)]
 pub struct QualityChecking;
@@ -72,4 +86,5 @@ impl MachineTag for QualityChecking {
     const COST_BASELINE: usize = 8000;
     const CAPACITY_MAX: usize = 10;
     const CAPACITY_MIN: usize = 8;
+    const FILL_TACTIC: FillTactic = FillTactic::Minimize;
 }
