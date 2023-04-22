@@ -10,16 +10,11 @@ use std::marker::PhantomData;
 // correct range, but requires generic parameters
 // or variable type to be supplied. It also
 // computes its prices.
-enum FillTactic {
-    Maximize,
-    Minimize,
-}
 pub trait MachineTag {
     const COST_STEP: usize;
     const COST_BASELINE: usize;
     const CAPACITY_MAX: usize;
     const CAPACITY_MIN: usize;
-    const FILL_TACTIC: FillTactic;
 }
 #[derive(Debug)]
 pub enum Error {
@@ -29,62 +24,83 @@ pub enum Error {
 
 // A Machine's implementation
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Machine<T: MachineTag> {
-    capacity: usize,
+    pub capacity: usize,
     tag: PhantomData<T>,
 }
 impl<T: MachineTag> Machine<T> {
+    fn downgrade(&mut self, count: usize) -> usize {
+        let max_count = (self.capacity - T::CAPACITY_MIN).min(count);
+        self.capacity -= max_count;
+        return max_count;
+    }
     pub fn price(&self) -> usize {
         T::COST_BASELINE + T::COST_STEP * (self.capacity - T::CAPACITY_MIN)
     }
     pub fn new(capacity: usize) -> Result<Machine<T>, Error> {
         match capacity {
-            c if c > T::CAPACITY_MAX => Err(MachineError::GTMaxCap),
-            c if c < T::CAPACITY_MIN => Err(MachineError::LTMinCap),
+            c if c > T::CAPACITY_MAX => Err(Error::GTMaxCap),
+            c if c < T::CAPACITY_MIN => Err(Error::LTMinCap),
             c => Ok(Machine {
                 capacity: c,
                 tag: PhantomData,
             }),
         }
     }
-    pub fn match_capacity(goal: usize) -> Vec<Self> {
-        match T::FILL_TACTIC {
-            FillTactic::Maximize => {
-                let n = goal / T::CAPACITY_MAX;
-            }
-            FillTactic::Minimize => {}
+    pub fn match_capacity(mut goal: usize) -> Vec<Self> {
+        if goal < T::CAPACITY_MIN {
+            goal = T::CAPACITY_MIN;
         }
+        // n = ceil(goal / cap_max)
+        let mut n = goal / T::CAPACITY_MAX;
+        if goal % T::CAPACITY_MAX != 0 {
+            n += 1;
+        }
+        let l = n * T::CAPACITY_MAX - goal;
+        let mut out = Vec::new();
+        for _ in 0..n {
+            out.push(Self::new(T::CAPACITY_MAX).unwrap());
+        }
+        out.iter_mut()
+            .scan(l, |well, m| {
+                let u = m.downgrade((T::CAPACITY_MAX - T::CAPACITY_MIN).min(*well));
+                *well -= u;
+                if *well > 0 {
+                    Some(())
+                } else {
+                    None
+                }
+            })
+            .for_each(drop);
+        return out;
     }
 }
 
 // Constants, which will get inlined
 // during monomorphization
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Assembly;
 impl MachineTag for Assembly {
     const COST_STEP: usize = 200;
     const COST_BASELINE: usize = 5000;
     const CAPACITY_MAX: usize = 15;
     const CAPACITY_MIN: usize = 10;
-    const FILL_TACTIC: FillTactic = FillTactic::Maximize;
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Soldering;
 impl MachineTag for Soldering {
     const COST_STEP: usize = 50;
     const COST_BASELINE: usize = 2000;
     const CAPACITY_MAX: usize = 30;
     const CAPACITY_MIN: usize = 20;
-    const FILL_TACTIC: FillTactic = FillTactic::Maximize;
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct QualityChecking;
 impl MachineTag for QualityChecking {
     const COST_STEP: usize = 2000;
     const COST_BASELINE: usize = 8000;
     const CAPACITY_MAX: usize = 10;
     const CAPACITY_MIN: usize = 8;
-    const FILL_TACTIC: FillTactic = FillTactic::Minimize;
 }
